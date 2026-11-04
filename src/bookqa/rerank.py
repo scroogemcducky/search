@@ -31,10 +31,10 @@ class Reranker(Protocol):
 
 
 class NoReranker:
-    """Keeps the search order. Scores fall with rank."""
+    """Keeps the search order and treats every candidate as relevant."""
 
     def score(self, queries: list[str], documents: list[str]) -> np.ndarray:
-        return np.zeros(len(documents), dtype=np.float32)
+        return np.ones(len(documents), dtype=np.float32)
 
     def close(self) -> None:
         pass
