@@ -91,3 +91,15 @@ Vectors are truncated to 1,024 dimensions (Qwen3 supports this "Matryoshka" trun
 A saved index records which model built it. Loading it with a different model configured raises an error instead of silently comparing incompatible vectors.
 
 A `hashing` embedder needs no model. It's useless for meaning but instant and deterministic, so tests run without downloads.
+
+## 5. Reranking
+
+Hybrid search embeds the question and each passage *separately*. A reranker reads them *together*, which is more accurate but too slow to run on every chunk. So search narrows thousands of chunks to about 50 candidates, and the reranker orders those.
+
+The default is **Qwen3-Reranker-4B**, as your notes suggest. It's a small language model asked "does this document meet the query? yes or no", and the score is the probability it gives to "yes". `local_models.Qwen3Reranker` follows the prompt format from the model card exactly.
+
+**Work is flattened into pairs.** The reranker's unit of work is a (question, passage) pair. When many questions are answered in one run, `rerank_many` flattens every question's candidates into one list of pairs and scores them in shared batches, then scatters the scores back by an `owner` array. The model loads once, and every batch is full regardless of how candidates are spread across questions. This is the data-oriented habit of turning nested loops ("for each question, for each candidate") into one flat array of work items plus an index saying who owns each item.
+
+**Batches are sorted by length.** The model pads every sequence in a batch to the longest one, so grouping prompts of similar length cuts wasted computation.
+
+The `none` and `overlap` backends exist for tests and for measuring how much the reranker helps, which your notes ask for.
