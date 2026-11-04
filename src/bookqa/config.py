@@ -36,7 +36,9 @@ class EmbeddingConfig:
     # "sentence-transformers" (local), "openai" (any OpenAI-compatible server),
     # or "hashing" (no model at all; for tests and dry runs).
     backend: str = "sentence-transformers"
-    model: str = "Qwen/Qwen3-Embedding-8B"
+    # 4B rather than 8B: in float16 the 8B needs ~16 GB, too much next to a
+    # reranker and an LLM in 24 GB of unified memory. `bookqa eval` can compare them.
+    model: str = "Qwen/Qwen3-Embedding-4B"
     # Qwen3 vectors can be truncated (Matryoshka). 0 keeps the full width.
     dimensions: int = 1024
     # Prepended to queries only. Qwen reports 1-5% gains from a task instruction.

@@ -5,7 +5,7 @@ from bookqa.config import Project, load_config
 
 def test_defaults_when_missing(tmp_path):
     config = load_config(tmp_path / "bookqa.toml")
-    assert config.embedding.model == "Qwen/Qwen3-Embedding-8B"
+    assert config.embedding.model == "Qwen/Qwen3-Embedding-4B"
 
 
 def test_nested_overrides(tmp_path):
