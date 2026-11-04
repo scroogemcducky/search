@@ -113,6 +113,16 @@ class AnswerConfig:
 
 
 @dataclasses.dataclass
+class EvalConfig:
+    # Embedders to compare with the main [embedding] settings. Each entry
+    # overrides some [embedding] keys, for example:
+    #   [[eval.embedders]]
+    #   model = "Qwen/Qwen3-Embedding-8B"
+    embedders: list[dict] = dataclasses.field(default_factory=list)
+    ks: list[int] = dataclasses.field(default_factory=lambda: [5, 10, 50])
+
+
+@dataclasses.dataclass
 class Config:
     books_dir: str = "books"
     prompts_dir: str = "prompts"
@@ -123,6 +133,7 @@ class Config:
     llm: LLMConfig = dataclasses.field(default_factory=LLMConfig)
     claims: ClaimsConfig = dataclasses.field(default_factory=ClaimsConfig)
     answer: AnswerConfig = dataclasses.field(default_factory=AnswerConfig)
+    eval: EvalConfig = dataclasses.field(default_factory=EvalConfig)
 
 
 def _build[T](cls: type[T], data: dict[str, Any], where: str) -> T:
@@ -137,6 +148,15 @@ def _build[T](cls: type[T], data: dict[str, Any], where: str) -> T:
             value = _build(sub, value, f"{where}{key}.")
         kwargs[key] = value
     return cls(**kwargs)
+
+
+def embedding_variant(base: EmbeddingConfig, overrides: dict[str, Any]) -> EmbeddingConfig:
+    """``base`` with some keys replaced. Unknown keys are rejected, as in ``load_config``."""
+    known = {f.name for f in dataclasses.fields(EmbeddingConfig)}
+    for key in overrides:
+        if key not in known:
+            raise ValueError(f"unknown setting 'eval.embedders.{key}' in {CONFIG_NAME}")
+    return dataclasses.replace(base, **overrides)
 
 
 def load_config(path: Path) -> Config:
