@@ -34,3 +34,24 @@ The object-oriented alternative, a `Chunk` class with a `.embedding` field and a
 The code knows only generic concepts: books, chunks, claims and questions. Everything specific to one corpus lives in its project directory: the questions, the prompt wording, the list of evidence types and the model instructions. One install can serve many projects, and the subject of a private project never appears in this repository.
 
 Settings are TOML (`bookqa.toml`), which Python reads with the standard library. Unknown keys are an error rather than being ignored, so a typo such as `modle = ...` fails loudly instead of silently using the default.
+
+## 3. Reading books and chunking
+
+Ingestion makes two passes, each of which turns one table into the next:
+
+```
+files --parse--> Paragraphs --pack--> Chunks
+```
+
+- **Parse** (`parse_text`, `parse_epub`) knows file formats and nothing else. It emits one row per paragraph, tagged with chapter and section numbers and titles.
+- **Pack** (`pack`) knows nothing about formats. It walks paragraph rows in order and groups neighbours from the same section into chunks of about `target_words`.
+
+Supporting a new format, such as PDF, only takes a parser that emits paragraph rows. The chunking rules stay in one place.
+
+**Chunks follow the book's structure.** A chunk never crosses a section boundary, so its chapter and section labels are always exact, and a citation such as "chapter 2, *Keep It Short*" is reliable. Chunks are about 250 words. That's long enough to hold a claim and its evidence, and short enough that a reranker can judge each one cleanly. A paragraph longer than `max_words` is split at sentence boundaries.
+
+**Context is attached when the chunk is used, not stored.** `contextual_text` prefixes each chunk with `Book > Chapter > Section` before embedding or prompting. A passage that only says "this approach" can then still match a question that names the chapter's topic. The stored `text` column stays verbatim, which the citation check needs later.
+
+**Book ids come from file names in sorted order.** Re-running ingestion over the same folder always gives the same ids.
+
+`examples/demo/books` holds three short invented books on afternoon naps that partly disagree. They exist to test the pipeline end to end, especially cross-book comparison.
