@@ -1,12 +1,12 @@
 from pathlib import Path
 
 import numpy as np
-from fakes import fake_llm
 
 from bookqa.claims import UNCLASSIFIED, ExtractionStats, extract_claims, parse, plan
 from bookqa.config import ChunkingConfig, ClaimsConfig
 from bookqa.ingest import ingest
 from bookqa.llm import ResponseCache, ScriptedLLM, parse_json_object
+from bookqa.offline import offline_llm
 from bookqa.prompts import load_prompt
 from bookqa.quotes import locate
 
@@ -75,7 +75,7 @@ def test_extract_claims_end_to_end_with_cache(tmp_path):
     books, chunks = ingest(DEMO_BOOKS, ChunkingConfig(target_words=60, max_words=120))
     config = ClaimsConfig(chunks_per_call=2)
     prompt = load_prompt("extract_claims")
-    llm = fake_llm(ResponseCache(tmp_path / "cache.sqlite"))
+    llm = offline_llm(ResponseCache(tmp_path / "cache.sqlite"))
     claims, stats = extract_claims(books, chunks, llm, prompt, config)
     assert stats.claims == len(claims) > 0
     assert stats.quote_not_found == 0
@@ -86,7 +86,7 @@ def test_extract_claims_end_to_end_with_cache(tmp_path):
     assert (claims.evidence == 0).any() and (claims.evidence == 3).any()
 
     # A second run is served entirely from the cache.
-    again = fake_llm(ResponseCache(tmp_path / "cache.sqlite"))
+    again = offline_llm(ResponseCache(tmp_path / "cache.sqlite"))
     claims2, _ = extract_claims(books, chunks, again, prompt, config)
     assert again.calls == 0
     assert claims2.claim == claims.claim

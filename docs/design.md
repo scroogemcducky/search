@@ -214,3 +214,33 @@ That covers the "compare models" and "with and without the reranker" steps in yo
 **The run is ordered by model, not by question.** Each embedder loads once, embeds the corpus (cached on disk, keyed by model and corpus text, so re-runs are free), embeds every question, searches, and is released before the next one loads. Then the reranker loads once and reranks every embedder's candidates for every question in one flattened batch. With two 4B to 8B models and a 4B reranker on a 24 GB machine, at most one model is in memory at a time.
 
 The report ends with the diagnosis from your notes: if the right passages reach the top 50 but not the top 5, it recommends improving reranking before changing the embedding model.
+
+## 9. Stages, files and the command line
+
+`pipeline.py` defines each stage as a function from files to files in `.bookqa/`:
+
+```
+ingest   books/            -> books.parquet, chunks.parquet
+extract  chunks            -> claims.parquet               (LLM, cached)
+index    chunks, claims    -> chunk_/claim_ vectors + bm25 (embedder)
+ask      questions         -> output/<question>/*.md       (embedder, reranker, LLM)
+eval     questions.jsonl   -> .bookqa/eval/report.md
+```
+
+Each stage can be re-run on its own, and a crash only costs the stage it happened in. **Everything between stages is inspectable**: open `claims.parquet` in pandas or DuckDB to see exactly what the model extracted.
+
+**Staleness is checked, not assumed.** `manifest.json` records a fingerprint of the chunk table each stage was built from. If the books or chunk settings change, `ask` refuses to mix new chunks with old claims or vectors and says to run `bookqa build`.
+
+**Memory is handled by ordering.** `ask` embeds the questions, releases the embedder, then loads the reranker. The reranker scores passages and claims for every question in **one** flattened batch, with claim rows offset past chunk rows so one text list covers both, and is released before the LLM stages start. On 24 GB, only one PyTorch model is in memory at a time.
+
+**`--offline` swaps every model for a stand-in:** the hashing embedder, a word-overlap reranker and a rule-based "LLM" (`offline.py`) that answers each default prompt in the right format. The tests use the same stand-ins, so the CLI test runs the real pipeline end to end in under a second.
+
+## What hasn't been tested
+
+The environment this was built in couldn't reach Hugging Face or run a local LLM, so three short pieces of code have only been written against their documentation:
+
+- `local_models.py`: sentence-transformers loading of Qwen3-Embedding, and the Qwen3-Reranker yes/no scoring from its model card.
+- `llm.OpenAIChat` and `embed.OpenAIEmbedder`: standard OpenAI-format requests.
+- The default prompts' behaviour with a real model. The offline model checks their format, not their quality.
+
+The first `bookqa build` on a real corpus is the test. Then use `bookqa claims` to read what was extracted before trusting answers built on it.

@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import numpy as np
-from fakes import UNCITED, fake_llm
 
 from bookqa.answer import Corpus, answer_questions, parse_positions, write_answer
 from bookqa.claims import claim_search_text, extract_claims
@@ -9,6 +8,7 @@ from bookqa.config import Config
 from bookqa.embed import HashingEmbedder
 from bookqa.index import Hits, SearchIndex
 from bookqa.ingest import contextual_text, ingest
+from bookqa.offline import UNCITED, offline_llm
 from bookqa.prompts import load_prompt
 from bookqa.rerank import OverlapReranker
 from bookqa.retrieve import CLAIM, PASSAGE, balance, retrieve
@@ -63,7 +63,7 @@ def test_answer_pipeline_on_demo(tmp_path):
     config.answer.passages = 3
     config.answer.max_claims_per_book = 2
     books, chunks = ingest(DEMO_BOOKS, config.chunking)
-    llm = fake_llm()
+    llm = offline_llm()
     claims, _ = extract_claims(books, chunks, llm, load_prompt("extract_claims"), config.claims)
     embedder = HashingEmbedder(256)
     chunk_index = SearchIndex.build(contextual_text(books, chunks), embedder)

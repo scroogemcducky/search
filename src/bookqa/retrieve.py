@@ -89,11 +89,16 @@ def retrieve(
         for q, v in zip(questions, vectors, strict=True)
     ]
 
-    passages = rerank_many(
-        reranker, questions, chunk_hits, contextual_text(books, chunks), a.passages
-    )
-    claim_texts = claim_search_text(books, chunks, claims)
-    ranked_claims = rerank_many(reranker, questions, claim_hits, claim_texts, len(claims))
+    # Rerank passages and claims in one flattened batch, so the reranker
+    # loads once. Claim rows are shifted past the chunk rows so a single
+    # text list covers both.
+    offset = len(chunks)
+    texts = contextual_text(books, chunks) + claim_search_text(books, chunks, claims)
+    shifted = [Hits(h.rows + offset, h.scores) for h in claim_hits]
+    ranked = rerank_many(reranker, questions + questions, chunk_hits + shifted, texts, len(texts))
+    n = len(questions)
+    passages = [ranked[q].top(a.passages) for q in range(n)]
+    ranked_claims = [Hits(ranked[n + q].rows - offset, ranked[n + q].scores) for q in range(n)]
 
     parts = []
     for q in range(len(questions)):
