@@ -255,7 +255,7 @@ def sources_markdown(answer: Answer, corpus: Corpus, config: Config, text: str) 
             )
         else:
             chunk = ev.row[i]
-            excerpt = corpus.chunks.text[chunk]
+            excerpt = " ".join(corpus.chunks.text[chunk].split())  # one line in a list item
             excerpt = excerpt if len(excerpt) <= 300 else excerpt[:300].rsplit(" ", 1)[0] + "…"
             lines.append(f"- **[{label}]** {location(corpus, chunk)}. “{excerpt}”")
     return "\n".join(lines) + "\n"

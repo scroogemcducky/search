@@ -9,6 +9,9 @@ dependencies = [
     "pyarrow>=17.0",
 ]
 
+[project.scripts]
+bookqa = "bookqa.cli:main"
+
 [project.optional-dependencies]
 # Local models on Apple Silicon (MPS) or CUDA. Not needed for tests.
 local = [
