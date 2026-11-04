@@ -1,0 +1,39 @@
+[project]
+name = "bookqa"
+version = "0.1.0"
+description = "Cited question answering across a small collection of books."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=2.0",
+    "pyarrow>=17.0",
+]
+
+[project.optional-dependencies]
+# Local models on Apple Silicon (MPS) or CUDA. Not needed for tests.
+local = [
+    "sentence-transformers>=3.3",
+    "transformers>=4.51",
+    "torch>=2.5",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "ruff>=0.8",
+]
+
+[build-system]
+requires = ["uv_build>=0.11,<0.12"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+# col() and strings() return dataclasses.Field objects, which RUF009 cannot see.
+ignore = ["RUF009"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
