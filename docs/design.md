@@ -191,3 +191,26 @@ Quotes were already confirmed against the source text during extraction, so thes
 ### One answer, many formats
 
 The cited answer is written once. The article and slideshow script are rewrites of that answer, not fresh generations from the sources, so they can't drift into new claims. They're verified with the same checker. Each output file ends with its own **Sources** section that maps every label to book, chapter, section and exact quote.
+
+## 8. Evaluation
+
+Your notes point out that leaderboard scores come from datasets that look nothing like your books. `evaluate.py` measures what matters: for your books and your questions, does the right passage come back, and how high?
+
+**Relevant passages are named by phrase, not chunk number.** Each question in `questions.jsonl` lists relevant passages as a book file plus a short phrase from that passage. Chunk numbers change whenever chunk sizes change, but a phrase still finds its chunk, so the question set survives re-chunking. A phrase that matches nothing is an error, so the set can't silently go stale.
+
+**What's compared.** One run compares:
+- keyword search alone,
+- every configured embedder in vector-only and hybrid mode,
+- each hybrid run with reranking.
+
+That covers the "compare models" and "with and without the reranker" steps in your notes.
+
+**What's measured.**
+- **recall@k:** the share of relevant passages found in the top k.
+- **MRR:** how high the first relevant passage ranks.
+- **nDCG@10:** rewards relevant passages for appearing near the top.
+- **books@k:** for comparison questions only, the share of the relevant *books* that appear in the top k. This is the number cross-book answers depend on.
+
+**The run is ordered by model, not by question.** Each embedder loads once, embeds the corpus (cached on disk, keyed by model and corpus text, so re-runs are free), embeds every question, searches, and is released before the next one loads. Then the reranker loads once and reranks every embedder's candidates for every question in one flattened batch. With two 4B to 8B models and a 4B reranker on a 24 GB machine, at most one model is in memory at a time.
+
+The report ends with the diagnosis from your notes: if the right passages reach the top 50 but not the top 5, it recommends improving reranking before changing the embedding model.
