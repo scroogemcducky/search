@@ -103,3 +103,43 @@ The default is **Qwen3-Reranker-4B**, as your notes suggest. It's a small langua
 **Batches are sorted by length.** The model pads every sequence in a batch to the longest one, so grouping prompts of similar length cuts wasted computation.
 
 The `none` and `overlap` backends exist for tests and for measuring how much the reranker helps, which your notes ask for.
+
+## 6. Claim extraction
+
+Your notes call this the biggest design decision, and it's what separates this pipeline from plain retrieval-augmented generation. Top-k passage search answers "where is X discussed?" well. A comparison question such as "do these authors agree about X?" needs **every book's position** on X, not whichever five passages scored highest. So every chapter is turned into claim rows once, up front:
+
+| column | meaning |
+|---|---|
+| `chunk`, `book` | where the claim came from (`book` is copied from the chunk so filters don't need a join) |
+| `evidence` | `int8` code into the project's evidence types: study, clinical observation, anecdote, opinion |
+| `claim` | the claim restated as one self-contained sentence |
+| `speaker` | the author, or someone the author cites |
+| `stance` | the speaker's position, in five words or fewer |
+| `quote` | the supporting passage, in the book's exact wording |
+
+### The stage as table passes
+
+```
+Chunks --plan--> work items --render--> prompts --LLM--> replies --parse--> Claims
+```
+
+- **Plan:** chunks are sorted by book and chapter, so a chapter is a contiguous run of rows. Finding every chapter boundary is one vectorised `np.diff` over the `book` and `chapter` columns. Each run is cut into work items of four adjacent chunks, which gives the model a little context and makes a quarter as many calls.
+- **Render:** all prompts are built before any is sent.
+- **LLM:** `complete_many` receives the whole batch and sends it in parallel, `llm.parallel` requests at a time. Local servers such as Ollama batch concurrent requests on the GPU.
+- **Parse:** each reply becomes claim rows, and each claim is checked as it's parsed.
+
+### Quotes are checked when claims are extracted, not after
+
+Models often copy text *almost* exactly: they straighten curly quotes, change a dash or drop a word. `quotes.locate` normalises both texts while keeping a map back to the original characters, then accepts an exact match or a close match covering at least 85% of the quote. The stored quote is **cut from the book itself**, not taken from the model. A claim whose quote can't be found is dropped and counted. Every stored claim is therefore guaranteed to trace back to real text, which makes the final verification step (step 6 in your notes) simple and exact.
+
+**Evidence types are codes, not strings.** "Only claims backed by studies" is then `claims.evidence == 0`. A type the model invents gets the code `-1` (unclassified) instead of a guess, so an opinion is never silently promoted to a finding.
+
+### Overnight runs and the response cache
+
+Extracting claims from 20 books takes hundreds of LLM calls, possibly hours on a laptop. Every reply is cached in SQLite, keyed by a hash of the model and the prompt. If a run stops, re-running it replays finished calls from disk in seconds and continues where it stopped. Changing a prompt or the model changes the key, so stale replies are never reused.
+
+### Prompts are files
+
+Each prompt is a text file in `src/bookqa/prompt_templates/`, overridable per project by a file of the same name in the project's `prompts/` folder. Placeholders use `$name`, so the JSON examples' curly braces need no escaping. Qwen3 models "think aloud" before answering, so the client adds `/no_think` to prompts by default and strips any `<think>` block from replies.
+
+Tests use a small rule-based fake model (`tests/fakes.py`) that answers each prompt in the right format.
