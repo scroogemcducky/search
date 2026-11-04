@@ -64,6 +64,8 @@ class LLMConfig:
     # "openai" talks to any OpenAI-compatible chat endpoint: Ollama, LM Studio,
     # mlx_lm.server, llama.cpp server, or a hosted API.
     backend: str = "openai"
+    # Ollama's default. Start it with OLLAMA_CONTEXT_LENGTH=16384: answer prompts
+    # run to ~8k tokens and a smaller context silently truncates them.
     base_url: str = "http://localhost:11434/v1"
     model: str = "qwen3:14b"
     api_key_env: str = ""

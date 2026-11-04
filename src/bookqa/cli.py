@@ -92,7 +92,10 @@ def cmd_status(pipeline: Pipeline) -> None:
         counts = np.bincount(chunks.book, minlength=len(books))
         claims = None
         if project.data("claims.parquet").exists():
-            claims = pipeline.load_corpus()[0].claims
+            try:
+                claims = pipeline.load_corpus()[0].claims
+            except RuntimeError as e:  # claims are from older chunks
+                print(f"\nnote: {e}")
         claim_counts = (
             np.bincount(claims.book, minlength=len(books)) if claims is not None else None
         )

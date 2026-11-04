@@ -70,3 +70,11 @@ def test_stale_chunks_are_detected(project):
 def test_ask_before_build_explains_what_to_do(project):
     with pytest.raises(SystemExit, match="bookqa ingest"):
         run(project, "ask", "--offline", "anything")
+
+
+def test_status_survives_stale_claims(project, capsys):
+    run(project, "build", "--offline")
+    (project / "bookqa.toml").write_text("[chunking]\ntarget_words = 40\n")
+    run(project, "ingest")
+    run(project, "status")
+    assert "note:" in capsys.readouterr().out

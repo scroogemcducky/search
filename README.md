@@ -49,8 +49,10 @@ brew install uv ollama
 uv sync --extra local
 ```
 
+Answer prompts run to about 8,000 tokens, and Ollama may cut prompts off at a smaller default context length without warning. Start the server with a larger context:
+
 ```bash
-ollama serve
+OLLAMA_CONTEXT_LENGTH=16384 ollama serve
 ```
 
 In another terminal:
