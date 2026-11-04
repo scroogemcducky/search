@@ -99,7 +99,17 @@ class AnswerConfig:
     passages: int = 12  # passages given to the answer prompt
     claims: int = 40  # claims retrieved before grouping
     max_claims_per_book: int = 8  # keeps one prolific book from dominating
+    # Reranker score below which a claim or passage counts as off-topic (0 to 1).
+    min_relevance: float = 0.1
+    # Output formats; each needs a prompt file named format_<name>.md.
     formats: list[str] = dataclasses.field(default_factory=lambda: ["article", "slides"])
+    # Verification flags a sentence that uses one of these words but cites
+    # only claims whose evidence type is not in research_evidence.
+    research_words: list[str] = dataclasses.field(
+        default_factory=lambda: ["study", "studies", "trial", "research", "survey", "data"]
+    )
+    research_evidence: list[str] = dataclasses.field(default_factory=lambda: ["study"])
+    revise: bool = True  # ask the model once to fix an answer that fails verification
 
 
 @dataclasses.dataclass

@@ -35,9 +35,42 @@ def fake_extract(user: str) -> str:
     return json.dumps({"claims": claims})
 
 
+UNCITED = "This sentence makes a point without any citation at all."
+
+
+def fake_group(user: str) -> str:
+    by_book: dict[str, list[str]] = {}
+    for label, book in re.findall(r"^\[(C\d+)\] \(([^;]+);", user, re.M):
+        by_book.setdefault(book, []).append(label)
+    positions = [{"position": f"The view in {b}", "claims": c} for b, c in by_book.items()]
+    return json.dumps({"positions": positions})
+
+
+def fake_answer(user: str) -> str:
+    lines = [
+        f"The books discuss this claim from {book} in some detail [{label}]."
+        for label, book in re.findall(r"^  \[(C\d+)\] \(([^;]+);", user, re.M)
+    ]
+    lines += [
+        f"One passage covers the question in more depth here [{label}]."
+        for label in re.findall(r"^\[(P\d+)\]", user, re.M)
+    ]
+    return " ".join([*lines, UNCITED])
+
+
 def respond(system: str, user: str) -> str:
     if "List the substantive claims" in user:
         return fake_extract(user)
+    if "Group the claims" in user:
+        return fake_group(user)
+    if "Write an answer in Markdown" in user:
+        return fake_answer(user)
+    if "A checker found these problems" in user:
+        draft = user.split("Draft answer:")[1].split("A checker found")[0]
+        return draft.replace(UNCITED, "").strip()
+    if "Verified answer:" in user:
+        answer = user.split("Verified answer:")[1].split("\n\n")[1]
+        return "# A Title\n\n" + answer
     raise AssertionError(f"fake LLM got an unexpected prompt:\n{user[:300]}")
 
 

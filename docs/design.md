@@ -143,3 +143,51 @@ Extracting claims from 20 books takes hundreds of LLM calls, possibly hours on a
 Each prompt is a text file in `src/bookqa/prompt_templates/`, overridable per project by a file of the same name in the project's `prompts/` folder. Placeholders use `$name`, so the JSON examples' curly braces need no escaping. Qwen3 models "think aloud" before answering, so the client adds `/no_think` to prompts by default and strips any `<think>` block from replies.
 
 Tests use a small rule-based fake model (`tests/fakes.py`) that answers each prompt in the right format.
+
+## 7. Answering: balance, group, write, verify
+
+This covers steps 3 to 6 of your notes. Every stage runs over **all questions at once**:
+
+```
+questions --embed--> vectors --search--> candidates --rerank--> Evidence
+Evidence --group--> positions --answer--> drafts --verify/revise--> answers --format--> article, slides
+```
+
+Each model loads once per batch, and every LLM stage is a single `complete_many` call. Answering 50 questions overnight costs the same model loads as answering one.
+
+### One flat `Evidence` table
+
+Each question gets a different number of passages and claims. The object-oriented shape would be `list[QuestionResult]`, each holding lists of hits. Instead there's one table for all questions:
+
+```
+question kind     row  score label
+0        passage  812  0.97  P1
+0        claim    143  0.91  C1
+1        passage  77   0.88  P1
+```
+
+A question's evidence is `evidence.question == q`, and every per-question step is a filter on one column.
+
+### Balanced claims
+
+Plain top-k lets one book that covers a topic at length crowd out the others, which is the wrong failure for comparison questions. `balance` gives each hit its rank *within its book*, then orders hits by that rank: every book's best claim, then every book's second best, and so on, with a per-book cap. It's all sorting and array arithmetic: one `lexsort` groups hits by book, `np.diff` finds where each book's run starts, and subtracting gives the within-book ranks.
+
+Claims and passages with a reranker score below `min_relevance` are dropped first, so balancing never pads an answer with off-topic material just to represent every book.
+
+### Positions instead of clusters
+
+Your notes say to "group claims by question". Embedding clusters group claims that are about the same thing. That's the opposite of what we need, since "naps improve memory" and "naps don't improve memory" sit close together in embedding space. So the LLM sorts each question's claims into **positions**: groups that agree on the answer. The answer prompt then sees the disagreement already laid out, with each claim's book, speaker and evidence type.
+
+### Verification is rules, not another model
+
+`verify.py` checks each sentence of the answer:
+
+- **uncited:** it states something but cites nothing.
+- **unknown source:** it cites a label the answer wasn't given, meaning the model made one up.
+- **evidence mismatch:** it uses research wording ("study", "trial", "data") but cites only claims whose evidence type isn't research. This is your "don't present an opinion as a finding" requirement.
+
+Quotes were already confirmed against the source text during extraction, so these checks complete the chain: sentence → citation → claim → exact quote → book, chapter and section. A failed answer gets one revision call listing its problems, and the version with fewer problems is kept. Remaining problems are printed at the top of the output file, never hidden.
+
+### One answer, many formats
+
+The cited answer is written once. The article and slideshow script are rewrites of that answer, not fresh generations from the sources, so they can't drift into new claims. They're verified with the same checker. Each output file ends with its own **Sources** section that maps every label to book, chapter, section and exact quote.
