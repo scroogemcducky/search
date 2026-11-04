@@ -70,6 +70,12 @@ class LLMConfig:
     temperature: float = 0.2
     max_tokens: int = 4096
     timeout_s: float = 600.0
+    # Requests sent at once. Local servers batch concurrent requests on the GPU
+    # (Ollama: OLLAMA_NUM_PARALLEL), so 2-4 raises throughput; 1 is safest.
+    parallel: int = 2
+    # Some models think aloud inside <think> tags before answering. Qwen3 skips
+    # that when the prompt ends with /no_think; set "" to allow thinking.
+    prompt_suffix: str = " /no_think"
 
 
 @dataclasses.dataclass
@@ -77,6 +83,13 @@ class ClaimsConfig:
     # Order matters: a claim's evidence code is its index in this list.
     evidence_types: list[str] = dataclasses.field(
         default_factory=lambda: ["study", "clinical observation", "anecdote", "opinion"]
+    )
+    # Shown to the model to explain the evidence types. Rewrite it with the list.
+    evidence_guide: str = (
+        "- study: a systematic study, trial, survey or dataset is cited\n"
+        "- clinical observation: a professional's observation of patients or clients\n"
+        "- anecdote: a single story or personal experience\n"
+        "- opinion: a belief, interpretation or recommendation without cited evidence"
     )
     chunks_per_call: int = 4  # adjacent chunks sent to the LLM in one extraction call
 
