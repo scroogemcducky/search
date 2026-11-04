@@ -52,7 +52,7 @@ requires-dist = [
     { name = "pyarrow", specifier = ">=17.0" },
     { name = "sentence-transformers", marker = "extra == 'local'", specifier = ">=3.3" },
     { name = "torch", marker = "extra == 'local'", specifier = ">=2.5" },
-    { name = "transformers", marker = "extra == 'local'", specifier = ">=4.51" },
+    { name = "transformers", marker = "extra == 'local'", specifier = ">=4.56" },
 ]
 provides-extras = ["local"]
 
