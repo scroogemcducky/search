@@ -55,3 +55,39 @@ Supporting a new format, such as PDF, only takes a parser that emits paragraph r
 **Book ids come from file names in sorted order.** Re-running ingestion over the same folder always gives the same ids.
 
 `examples/demo/books` holds three short invented books on afternoon naps that partly disagree. They exist to test the pipeline end to end, especially cross-book comparison.
+
+## 4. Hybrid search
+
+Search runs two methods and merges their results:
+
+- **Embeddings** (`embed.py`) find passages that mean the same thing in different words.
+- **BM25 keyword search** (`keyword.py`) finds exact terms such as names, numbers and rare words, which embeddings tend to blur.
+- **Reciprocal rank fusion** (`index.py`) merges the two rankings. Each row scores `1 / (60 + rank)` per list. Because RRF uses ranks rather than raw scores, unbounded BM25 scores and cosine similarities combine without any calibration.
+
+### Data layout
+
+**Vectors are one matrix.** All embeddings are unit length and stored as one `float32[n_rows, dim]` array, so scoring every chunk against a query is a single matrix-vector product, `vectors @ q`. At 8,000 chunks and 1,024 dimensions, that's 8 million multiply-adds, under a millisecond. A vector database would add a server, a network hop and approximate results to save time we don't need to save. The matrix is memory-mapped on load, so opening an index costs almost nothing.
+
+**The keyword index is three flat arrays.** The usual inverted index is a dictionary from term to a list of postings. Here it's the same layout as a sparse column matrix:
+
+```
+term_start   [0, 3, 5, ...]       postings for term t are term_start[t]:term_start[t+1]
+posting_doc  [0, 4, 9, 2, 7, ...] document ids
+posting_tf   [1, 2, 1, 1, 3, ...] term counts
+```
+
+Scoring one query term is a slice plus a few vectorised operations, with no Python loop over documents. Building it is one `np.unique` over (term, document) pairs. The whole index saves as one `.npz` file.
+
+**Top-k uses `argpartition`.** It finds the best k in linear time, and only those k get sorted.
+
+**One index type serves every table.** `SearchIndex` only needs "row i has text i", so the same code will index chunks now and claims later. That's possible because ids are row indices.
+
+### Models on a 24 GB M4
+
+The default embedder is **Qwen3-Embedding-4B**, not the 8B from the notes. In float16 the 8B needs about 16 GB, which doesn't leave room for a reranker and an LLM in 24 GB of unified memory. The 4B scored within a point of the 8B on retrieval and uses half the memory. Models load one stage at a time and are released after use (`Embedder.close()`), so peak memory stays near the largest single model. `bookqa eval` (PR 7) compares the two on your own books, so you can switch if the 8B earns it.
+
+Vectors are truncated to 1,024 dimensions (Qwen3 supports this "Matryoshka" truncation). That makes the matrix 2.5 times smaller than the full 2,560 for a small loss in quality.
+
+A saved index records which model built it. Loading it with a different model configured raises an error instead of silently comparing incompatible vectors.
+
+A `hashing` embedder needs no model. It's useless for meaning but instant and deterministic, so tests run without downloads.
