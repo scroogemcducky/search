@@ -13,7 +13,7 @@ dependencies = [
 # Local models on Apple Silicon (MPS) or CUDA. Not needed for tests.
 local = [
     "sentence-transformers>=3.3",
-    "transformers>=4.51",
+    "transformers>=4.56",
     "torch>=2.5",
 ]
 
